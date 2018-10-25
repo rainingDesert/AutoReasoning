@@ -13,19 +13,13 @@ public:
     KBG(int);
     virtual bool conPLTrue(bool*);
     virtual bool resPLTrue(bool*);
-    virtual Cla* PLResolve(Cla*, Cla*);
-    virtual Cla* getCla(int);
-
-    //////////////// use for test
-    virtual void showClas();
-    virtual void showSymbols();
 
     int getNum();
 };
 
 //Clause
 class Clause: public KBG{
-private:
+protected:
     Cla** clas;
     Cla** res;
     string* symbols;
@@ -34,35 +28,21 @@ private:
     int breakSymbol(string*, string*);
     bool getBoolResult(bool*, Cla**, int);
 public:
-    Clause(string*, string*, int, int);       //input string should be conditions and result
-    bool conPLTrue(bool*);
-    bool resPLTrue(bool*);
-    Cla* PLResolve(Cla*, Cla*);
-    Cla* getCla(int);
-
-    //////////////// use for test
-    void showClas();
-    void showSymbols();
-};
-
-//Modus Ponens
-class ModusPonens: public KBG{
-private:
-    int limitLen;
-public:
-    ModusPonens();
+    Clause(string*, int, string*, int);       //input string should be conditions and result
     bool conPLTrue(bool*);
     bool resPLTrue(bool*);
 };
 
-//Wumpus World
-class WumpusWorld: public KBG{
+//Clause for DPLL
+class ClaForDPLL: public Clause{
 private:
-    int limitLen;
+    char checkClause(Cla*, char*);  //return '-' to be no result, '0' to be false, '1' to be true
 public:
-    WumpusWorld();
-    bool conPLTrue(bool*);
-    bool resPLTrue(bool*);
+    ClaForDPLL(string*, int);
+    char CNFCheck(char*);       //check CNF for DPLL    return '-' to be no result, '0' to be false, '1' to be true
+    int* FindPureSymbol(bool*, char*);       //find pure symbol
+    int* FindUnitSymbol(char*);      //find unit symbol
+    static Cla* PLResolve(Cla*, Cla*);
 };
 
 #endif

@@ -8,21 +8,32 @@ class Alg{
 protected:
     KBG* kb;
 public:
+    Alg();
     Alg(KBG*);
-    ~Alg();
+    virtual ~Alg();
     virtual bool execution();
 };
 
 //Truth Table for Entailment
-class TTE : Alg{
+class TTE : public Alg{
 private:
-    bool** temp;     //you should delete this in the end
-    int top;
     bool TTEntails();  //do TT-Entails
     bool TTCheckAll(bool*, int, int);  //function that implement TT-Entails
 public:
     TTE(KBG*);
     ~TTE();
+    bool execution();
+};
+
+//DPLL
+class DPLL : public Alg{
+private:
+    ClaForDPLL* cfd;
+    bool DPLLSatisfied();   //called by exection
+    bool DPLLImp(bool*, char*);     //do DPLL
+public:
+    DPLL(KBG*);
+    ~DPLL();
     bool execution();
 };
 

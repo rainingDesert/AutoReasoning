@@ -45,44 +45,12 @@ bool KBG::resPLTrue(bool* boolArray){  //should be implement in children class
     return false;
 };
 
-Cla* KBG::PLResolve(Cla* cla1, Cla* cla2){  //should be implement in children class
-    cerr << "you should be implemented" << endl;
-    return NULL;
-}
-
 int KBG::getNum(){
     return this->num;
 }
 
-Cla* KBG::getCla(int claId){    //should be implement in children class
-    cerr << "you should be implemented" << endl;
-    return NULL;
-}
-
-//////////////// use for test
-void KBG::showClas(){}
-void KBG::showSymbols(){}
-
 /////////////////////////--------------Clause---------------///////////////////////////////////
-void Clause::showClas(){
-    cout << "condition" << endl;
-    for(int claId = 0; claId < this->claNum; claId++){
-        for(int symId = 0; symId < this->clas[claId]->symNum; symId++){
-            cout << this->clas[claId]->wheNot[symId] << this->symbols[this->clas[claId]->symbol[symId]] << " ";
-        }
-        cout << endl;
-    }
-
-    cout << "result" << endl;
-    for(int claId = 0; claId < this->resNum; claId++){
-        for(int symId = 0; symId < this->res[claId]->symNum; symId++){
-            cout << this->res[claId]->wheNot[symId] << this->symbols[this->res[claId]->symbol[symId]] << " ";
-        }
-        cout << endl;
-    }
-}
-
-Clause::Clause(string* clauses, string* res, int claNum, int resNum): KBG(){
+Clause::Clause(string* clauses, int claNum, string* res = NULL, int resNum = 0): KBG(){
     this->claNum = claNum;
     this->resNum = resNum;
     int num = this->breakSymbol(clauses, res);
@@ -172,6 +140,19 @@ int Clause::breakSymbol(string* clauses, string* res){
         round++;
     }
 
+    //format array
+    string* tempSymbols = new string[symNum];
+    for(int symId = 0; symId < symNum; symId++){
+        tempSymbols[symId] = this->symbols[symId];
+    }
+    delete[] this->symbols;
+    this->symbols = tempSymbols;
+
+    delete[] wheNot;
+    wheNot = NULL;
+    delete[] claSyms;
+    claSyms = NULL;
+
     return symNum;
 }
 
@@ -204,8 +185,144 @@ bool Clause::resPLTrue(bool* boolArray){
     return this->getBoolResult(boolArray, this->res, this->resNum);
 }
 
+///////////////////////////////////////--------------ClaForDPLL-----------------////////////////////////////////
+//constructor of ClaForDPLL
+ClaForDPLL::ClaForDPLL(string* clauses, int claNum): Clause(clauses, claNum){}
+
+//check the value of a clause
+char ClaForDPLL::checkClause(Cla* clause, char* model){
+    char claJud = '-';
+    bool falCheck = true;
+
+    //inside a clause
+    for(int symId = 0; symId < clause->symNum; symId++){ 
+        char modSym = model[clause->symbol[symId]];
+        if(modSym != '-'){      //model include such symbol
+            if(modSym - '0' + int(clause->wheNot[symId]) != 1){
+                claJud = '1';
+                break;
+            }
+        }
+        else{   //no symbol inside model
+            falCheck = false;
+        }
+    }
+
+    //check final result
+    if(claJud == '-' && falCheck){
+        claJud = '0';
+    }
+    return claJud;
+}
+
+//check CNF
+char ClaForDPLL::CNFCheck(char* model){
+    char claJud = '-';
+    bool falCheck = true;  //whether clause false can be possible
+    bool trueCheck = true;  //whether final true can be possible
+
+    for(int claId = 0; claId < this->claNum; claId++){  //check each clause
+        claJud = '-';
+        falCheck = true;
+
+        //inside a clause
+        claJud = this->checkClause(this->clas[claId], model);
+
+        if(claJud == '0'){
+            return '0';
+        }
+        else if(claJud == '-'){
+            trueCheck = false;
+        }
+    }
+
+    //final result
+    if(trueCheck){
+        return '1';
+    }
+    else{
+        return '-';
+    }
+}
+
+//find pure symbol
+int* ClaForDPLL::FindPureSymbol(bool* symbols, char* model){
+    int* result = NULL;
+    char* wheNot = new char[this->num];
+    bool* same = new bool[this->num];
+    for(int wId = 0; wId < this->num; wId++){
+        wheNot[wId] = '-';
+        same[wId] = true;
+    }
+
+    //check each symbol in clause
+    for(int claId = 0; claId < this->claNum; claId++){
+        //check whether current clause has a truth value
+        if(this->checkClause(this->clas[claId], model) != '-')
+            continue;
+
+        //inside a clause
+        for(int symId = 0; symId < this->clas[claId]->symNum; symId++){
+            if(wheNot[this->clas[claId]->symbol[symId]] == '-'){
+                wheNot[this->clas[claId]->symbol[symId]] = (char)('0' + (int)this->clas[claId]->wheNot[symId]);
+            }
+            else if(wheNot[this->clas[claId]->symbol[symId]] - '0' + int(this->clas[claId]->wheNot[symId]) == 1){
+                same[this->clas[claId]->symbol[symId]] = false;
+            }
+        }
+    }
+
+    //get a pure symbol
+    for(int symId = 0; symId < this->num; symId++){
+        if(!symbols[symId])
+            continue;
+        if(!same[symId])
+            continue;
+        result = new int[2];
+        result[0] = symId;
+        if(wheNot[symId] == '-')    //value of current symbol does not matter
+            result[1] = '0';
+        else
+            result[1] = wheNot[symId] - '0';    
+        break;
+    }
+
+    delete[] wheNot;
+    wheNot = NULL;
+    delete[] same;
+    same = NULL;
+
+    return result;
+}
+
+//find unit symbol
+int* ClaForDPLL::FindUnitSymbol(char* model){
+    int* result = new int[2];
+    int symAvNum = 0;
+
+    //check each clause
+    for(int claId = 0; claId < this->claNum; claId++){
+        if(checkClause(this->clas[claId], model) != '0')
+            continue;
+        symAvNum = 0;
+        for(int symId = 0; symId < this->clas[claId]->symNum; symId++){
+            if(model[this->clas[claId]->symbol[symId]]== '-'){
+                symAvNum += 1;
+                result[0] = symId;
+                result[1] = int(this->clas[claId]->wheNot[symId]);
+            }
+        }
+        //check whether exist unit symbol
+        if(symAvNum == 1){
+            return result;
+        }
+    }
+    delete[] result;
+    return NULL;
+}
+
 //resolve PL
-Cla* Clause::PLResolve(Cla* cla1, Cla* cla2){
+Cla* ClaForDPLL::PLResolve(Cla* cla1, Cla* cla2){
     int* symbol = new int[cla1->symNum + cla2->symNum];
     int* cla2Symbol = new int[cla2->symNum];
     bool* wheNot = new bool[cla1->symNum + cla2->symNum];
@@ -252,81 +369,5 @@ Cla* Clause::PLResolve(Cla* cla1, Cla* cla2){
 
     Cla* newCla = new Cla(symbol, symClaNum, wheNot);
 
-    cout << "new clause" << endl;
-    for(int symId = 0; symId < newCla->symNum; symId++){
-        cout << newCla->wheNot[symId] << this->symbols[newCla->symbol[symId]] << " ";
-    }
-    cout << endl;
-
     return newCla;
-}
-
-//get clause
-Cla* Clause::getCla(int claId){
-    return this->clas[claId];
-}
-
-/////////////////////////////////////////////
-void Clause::showSymbols(){
-    for(int i = 0; i < this->num; i++){
-        cout << setw(7) << this->symbols[i] << " ";
-    }
-    cout << endl;
-}
-
-//constructor for Modus Ponens
-ModusPonens::ModusPonens() : KBG(2){
-    this->limitLen = 2;
-};
-
-//show the judgement with Modus Ponens' condition
-//boolArray[0] -> P, boolArray[1] -> Q
-bool ModusPonens::conPLTrue(bool* boolArray){
-    if(this->num != this->limitLen){
-        cerr << "wrong length" << endl;
-        return false;
-    }
-
-    if(boolArray[0] && boolArray[1])    
-        return true;
-    return false;
-};
-
-//show the judgement with Modus Ponens' result
-bool ModusPonens::resPLTrue(bool* boolArray){
-    return boolArray[1];
-}
-
-//constructor for Wumpus World
-WumpusWorld::WumpusWorld() : KBG(7){
-    this->limitLen = 7;
-};
-
-//show the judgement with Wumpus World's condition
-//boolArray[0] -> P(1,1), boolArray[1] -> P(1,2), boolArray[2] -> P(2,1), boolArray[3] -> P(2,2), boolArray[4] -> P(3,1)
-//boolArray[5] -> B(1,1), boolArray[6] -> B(2,1)
-bool WumpusWorld::conPLTrue(bool* boolArray){
-    if(this->num != this->limitLen){
-        cerr << "wrong length" << endl;
-        return false;
-    }
-
-    if(boolArray[0])       //not P(1,1)   
-        return false;
-    if(boolArray[5])        //not B(1,1)
-        return false;
-    if(!boolArray[6])       //B(2,1)
-        return false;
-
-    if(boolArray[1] || boolArray[2])    //B(1,1) <-> (P(1,2) V P(2,1)) with B(1,1) must be false
-        return false;
-    if(!(boolArray[3] || boolArray[4]))     //B(2,1) <-> (P(1,1) V P(2,2) V P(3,1)) with B(2,1) must be true, P(1,1) must be false
-        return false;
-
-    return true;
-};
-
-//show the judgement with Wumpus World's result
-bool WumpusWorld::resPLTrue(bool* boolArray){
-    return boolArray[3];
 }
